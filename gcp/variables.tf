@@ -5,22 +5,33 @@ variable "project" {
 
 variable "region" {
   description = "gcp region to deploy the services to"
-  default     = "us-west1"
+  default     = "asia-south1"
+  type        = string
+}
+
+variable "zone" {
+  description = "gcp zone in a given region"
+  default     = "asia-south1-a"
   type        = string
 }
 
 variable "ssh_private_key" {
-  description = "private key to connect to the bastion/replicated instance"
+  description = "private key to connect to the instance"
+  type        = string
+}
+
+variable "bastion_ssh_private_key" {
+  description = "private key to connect to the bastion instance"
   type        = string
 }
 
 variable "ssh_public_key" {
-  description = "public key to be use when creating the bastion/replicated instance"
+  description = "public key to be added to the authorized_keys file"
   type        = string
 }
 
 variable "ssh_user" {
-  description = "user name to connect to bastion/replicated instance"
+  description = "user name to connect to instance"
   type        = string
 }
 
@@ -44,7 +55,12 @@ variable "identifier" {
   type        = string
 }
 
-variable "replicas" {
+variable "instances" {
   description = "instance count"
+  type        = number
+}
+
+variable "disks" {
+  description = "disks/instance count"
   type        = number
 }
