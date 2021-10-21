@@ -64,3 +64,9 @@ variable "disks" {
   description = "disks/instance count"
   type        = number
 }
+
+variable "disk_type" {
+  description = "disk type"
+  type        = string
+  default     = "pd-balanced"
+}

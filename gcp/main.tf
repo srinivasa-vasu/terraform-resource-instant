@@ -40,7 +40,8 @@ resource "google_compute_instance" "instances" {
 
   boot_disk {
     initialize_params {
-      image = "centos-cloud/centos-7"
+      #      image = "centos-cloud/centos-7"
+      image = "ubuntu-os-cloud/ubuntu-1804-lts"
       size  = 50
       type  = "pd-ssd"
     }
@@ -103,7 +104,7 @@ resource "google_compute_attached_disk" "attach_disks" {
 resource "google_compute_disk" "disks" {
   count = local.disks_count
   name  = "${var.identifier}-nw-n${format("%d", count.index + 1)}"
-  type  = "pd-extreme"
+  type  = var.disk_type
   zone  = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, count.index)
   # image = "centos-cloud/centos-7"
   size = 50
