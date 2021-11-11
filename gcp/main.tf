@@ -32,18 +32,18 @@ data "google_compute_instance" "bastion" {
 }
 
 resource "google_compute_instance" "instances" {
-  count = var.instances
-  name  = "${var.identifier}-n${format("%d", count.index + 1)}"
-  # machine_type = "n1-standard-2"
-  machine_type = "n2-highcpu-16"
-  zone         = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, count.index)
+  count        = var.instances
+  name         = "${var.identifier}-n${format("%d", count.index + 1)}"
+  machine_type = "n1-standard-2"
+  # machine_type = "n2-highcpu-16"
+  zone = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, count.index)
 
   boot_disk {
     initialize_params {
-      #      image = "centos-cloud/centos-7"
-      image = "ubuntu-os-cloud/ubuntu-1804-lts"
-      size  = 50
-      type  = "pd-ssd"
+      image = "centos-cloud/centos-7"
+      # image = "ubuntu-os-cloud/ubuntu-1804-lts"
+      size = 50
+      type = var.disk_type
     }
   }
 
@@ -105,7 +105,7 @@ resource "google_compute_disk" "disks" {
   count = local.disks_count
   name  = "${var.identifier}-nw-n${format("%d", count.index + 1)}"
   type  = var.disk_type
-  zone  = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, count.index)
+  zone  = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, floor(count.index / var.disks))
   # image = "centos-cloud/centos-7"
   size = 50
   # provisioned_iops = 100000
