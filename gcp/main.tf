@@ -27,14 +27,15 @@ data "google_compute_zones" "zones" {
 }
 
 data "google_compute_instance" "bastion" {
-  name = "yb-bastion"
+  name = "yba-bastion"
   zone = "asia-south1-a"
 }
 
 resource "google_compute_instance" "instances" {
   count        = var.instances
   name         = "${var.identifier}-n${format("%d", count.index + 1)}"
-  machine_type = "n1-standard-2"
+  machine_type = var.instance_type
+  allow_stopping_for_update = true
   # machine_type = "n2-highcpu-16"
   zone = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, count.index)
 
@@ -44,6 +45,7 @@ resource "google_compute_instance" "instances" {
       # image = "ubuntu-os-cloud/ubuntu-1804-lts"
       size = 50
       type = var.disk_type
+      labels = var.labels
     }
   }
 
@@ -52,6 +54,8 @@ resource "google_compute_instance" "instances" {
     # access_config {
     # }
   }
+
+  labels = var.labels
 
   metadata = {
     sshKeys = "${var.ssh_user}:${file(var.ssh_public_key)}"
@@ -107,6 +111,7 @@ resource "google_compute_disk" "disks" {
   type  = var.disk_type
   zone  = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, floor(count.index / var.disks))
   # image = "centos-cloud/centos-7"
-  size = 50
+  size = var.disk_size
+  labels = var.labels
   # provisioned_iops = 100000
 }

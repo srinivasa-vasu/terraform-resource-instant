@@ -70,3 +70,20 @@ variable "disk_type" {
   type        = string
   default     = "pd-balanced"
 }
+
+variable "disk_size" {
+  description = "value in GB"
+  type        = number
+  default     = 50
+}
+
+variable "instance_type" {
+  description = "instance types to create"
+  default     = "c2d-standard-32"
+  type        = string
+}
+
+variable "labels" {
+  description = "labels to be added to the resources"
+  type        = map(string)
+}
