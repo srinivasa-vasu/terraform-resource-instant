@@ -37,10 +37,10 @@ variable "bastion_ssh_user" {
   default     = "ubuntu"
 }
 
-variable "credentials" {
-  description = "iam credentials"
-  type        = string
-}
+# variable "credentials" {
+#   description = "shared iam credentials file path"
+#   type        = string
+# }
 
 variable "vpc" {
   description = "vpc region"
@@ -49,11 +49,6 @@ variable "vpc" {
 
 variable "subnet" {
   description = "vpc subnet"
-  type        = string
-}
-
-variable "identifier" {
-  description = "run identifier"
   type        = string
 }
 
@@ -76,4 +71,63 @@ variable "instance_type" {
 variable "bastion" {
   description = "bastion instance name"
   type        = string
+}
+
+variable "config" {
+  description = "shared config file path"
+  type        = string
+}
+
+variable "profile" {
+  description = "aws profile name"
+  type        = string
+}
+
+variable "labels" {
+  description = "labels to be added to the resources"
+  type        = map(string)
+}
+
+variable "ami_type" {
+  description = "ami os distribution to use"
+  type        = string
+  default     = "almalinux8"
+}
+
+variable "disk_size" {
+  description = "disk size to use in GB"
+  type        = number
+  default     = 50
+}
+
+variable "disk_type" {
+  description = "disk type to use"
+  type        = string
+  default     = "gp3"
+}
+
+variable "disks_mount_points" {
+  type = list(object({
+    device_name   = string
+    mount_point   = string
+    device_suffix = string
+  }))
+  default = [
+    {
+      device_name   = "/dev/nvme"
+      mount_point   = "/disks/ssd"
+      device_suffix = "n1"
+    }
+  ]
+}
+
+variable "security_group" {
+  description = "security group to use"
+  type        = string
+}
+
+variable "bastion_on" {
+  description = "enable/disable bastion"
+  type        = bool
+  default     = false
 }

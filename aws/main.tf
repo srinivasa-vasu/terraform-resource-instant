@@ -1,15 +1,66 @@
 locals {
   disks_count = (var.disks * var.instances)
   ingress     = "${chomp(data.http.localip.body)}/32"
-  dev_ids     = ["b", "c"]
+
+  # disks_mounts = [for index in range(var.disks) : {
+  #   device_name = "${var.disks_mount_points[0].device_name}${index + 2}${var.disks_mount_points[0].device_suffix}"
+  #   mount_point = "${var.disks_mount_points[0].mount_point}${index - 1}"
+  # }]
+
+  disks_mounts = [for index in range(var.disks) : [
+    "${var.disks_mount_points[0].device_name}${index + 2}${var.disks_mount_points[0].device_suffix}", "${var.disks_mount_points[0].mount_point}${index}"
+  ]]
+
+
+  ami_list = [
+    {
+      "type" = "ubuntu18"
+      "path" = "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*"
+    },
+    {
+      "type" = "ubuntu20"
+      "path" = "ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"
+    },
+    {
+      "type" = "ubuntu22"
+      "path" = "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-daily-*"
+    },
+    {
+      "type" = "centos7"
+      "path" = "centos/7/images/CentOS-7-x86_64-GenericCloud-*"
+    },
+    {
+      "type" = "almalinux8"
+      "path" = "AlmaLinux OS 8*"
+    },
+    {
+      "type" = "almalinux9"
+      "path" = "AlmaLinux OS 9*"
+    },
+    {
+      "type" = "rhel8"
+      "path" = "RHEL-8*"
+    },
+    {
+      "type" = "amazonlinux2"
+      "path" = "amzn2-ami-hvm-2.0.*-x86_64-gp2"
+    }
+  ]
+
+  selected_ami = lookup({ for val in local.ami_list :
+    0 => val if val.type == var.ami_type }, 0,
+    {
+      "type" = "almalinux8"
+      "path" = "AlmaLinux OS 8*"
+  })
 }
 
 provider "aws" {
-  region                  = var.region
-  shared_credentials_file = var.credentials
+  region  = var.region
+  profile = var.profile
 }
 
-# Workstation public ip to allow access to. It identies the IP where this gets executed and adds it to the 
+# Workstation public ip to allow access to. It identies the IP where this gets executed and adds it to the
 # firewall rule in the firewall block
 data "http" "localip" {
   url = "http://ipv4.icanhazip.com"
@@ -23,21 +74,24 @@ data "aws_vpc" "vpc" {
   }
 }
 
-data "aws_subnet" "subnet" {
-  vpc_id = data.aws_vpc.vpc.id
-  # id     = var.subnet
-  filter {
-    name   = "tag:Name"
-    values = ["${var.subnet}"]
-  }
-}
-
 data "aws_availability_zones" "zones" {
   state = "available"
 }
 
+data "aws_subnets" "selected" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.vpc.id]
+  }
+  filter {
+    name   = "tag:Name"
+    values = ["*pvt*"]
+  }
+}
+
 data "aws_instance" "bastion" {
   # instance_id = "yb-bastion"
+  count = var.bastion_on ? 1 : 0
   filter {
     name   = "tag:Name"
     values = ["${var.bastion}"]
@@ -53,11 +107,10 @@ data "aws_ami" "ami" {
   owners      = ["aws-marketplace"]
 
   filter {
-    name = "name"
-    values = [
-      "CentOS Linux 7 x86_64 HVM EBS *",
-    ]
+    name   = "name"
+    values = [local.selected_ami.path]
   }
+
   filter {
     name   = "architecture"
     values = ["x86_64"]
@@ -70,10 +123,10 @@ data "aws_ami" "ami" {
 }
 
 data "aws_security_groups" "sg" {
-  filter {
-    name   = "group-name"
-    values = ["${var.identifier}*"]
-  }
+  # filter {
+  #   name   = "group-name"
+  #   values = [var.security_group]
+  # }
 
   filter {
     name   = "vpc-id"
@@ -81,8 +134,16 @@ data "aws_security_groups" "sg" {
   }
 
   filter {
-    name   = "tag:kind"
-    values = ["intra"]
+    name   = "tag:Name"
+    values = [var.security_group]
+  }
+}
+
+data "template_file" "disk_setup" {
+  template = file("../shared/scripts/format_and_mount_disks.tpl")
+
+  vars = {
+    disks = join(" ", [for disk in local.disks_mounts : join(",", disk)])
   }
 }
 
@@ -93,27 +154,27 @@ resource "aws_instance" "instances" {
   instance_type          = var.instance_type
   key_name               = var.ssh_keypair
   availability_zone      = var.zone != "" ? var.zone : element(data.aws_availability_zones.zones.names, count.index)
-  subnet_id              = data.aws_subnet.subnet.id
+  subnet_id              = var.subnet != "" ? var.subnet : element(data.aws_subnets.selected.ids, count.index)
   vpc_security_group_ids = data.aws_security_groups.sg.ids
   root_block_device {
     volume_size = 50
+    tags        = var.labels
   }
-  tags = {
-    Name = "${var.identifier}-n${format("%d", count.index + 1)}"
-  }
+
+  tags = var.labels
 
   lifecycle {
     create_before_destroy = true
   }
 }
 
-resource "null_resource" "format_attached_disks" {
-  count = var.instances
+resource "null_resource" "format_attached_disks_bastion_on" {
+  count = var.bastion_on ? var.instances : 0
   depends_on = [
     aws_volume_attachment.attach_disks
   ]
   connection {
-    bastion_host        = data.aws_instance.bastion.public_ip
+    bastion_host        = data.aws_instance.bastion[*].public_ip
     bastion_private_key = file(var.ssh_private_key)
     bastion_user        = var.bastion_ssh_user
     host                = aws_instance.instances[count.index].private_ip
@@ -124,23 +185,32 @@ resource "null_resource" "format_attached_disks" {
 
   provisioner "remote-exec" {
     inline = [
-      "sudo mkfs -t xfs /dev/nvme2n1",
-      "sudo mkfs -t xfs /dev/nvme3n1",
-      "sudo mkdir -p /disks/ssd0",
-      "sudo mkdir -p /disks/ssd1",
-      "sudo mount /dev/nvme2n1 /disks/ssd0",
-      "sudo mount /dev/nvme3n1 /disks/ssd1",
-      "sudo cp /etc/fstab /etc/fstab.orig",
-      "disk0_uuid=$(sudo blkid | grep -i \"/dev/nvme2n1\" | awk '{print $2}' | tr -d '\"')",
-      "disk1_uuid=$(sudo blkid | grep -i \"/dev/nvme3n1\" | awk '{print $2}' | tr -d '\"')",
-      "echo $disk0_uuid /disks/ssd0  xfs  defaults,nofail  0  2 | sudo tee -a /etc/fstab",
-      "echo $disk1_uuid /disks/ssd1  xfs  defaults,nofail  0  2 | sudo tee -a /etc/fstab"
+      data.template_file.disk_setup.rendered
+    ]
+  }
+}
+
+resource "null_resource" "format_attached_disks_bastion_off" {
+  count = var.bastion_on ? 0 : var.instances
+  depends_on = [
+    aws_volume_attachment.attach_disks
+  ]
+  connection {
+    host        = aws_instance.instances[count.index].private_ip
+    type        = "ssh"
+    user        = var.ssh_user
+    private_key = file(var.ssh_private_key)
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      data.template_file.disk_setup.rendered
     ]
   }
 }
 
 resource "aws_volume_attachment" "attach_disks" {
-  device_name = "/dev/sd${local.dev_ids[count.index]}"
+  device_name = local.disks_mounts[count.index].device_name
   volume_id   = aws_ebs_volume.disks[count.index].id
   instance_id = aws_instance.instances[floor(count.index / var.disks)].id
   count       = local.disks_count
@@ -149,9 +219,11 @@ resource "aws_volume_attachment" "attach_disks" {
 resource "aws_ebs_volume" "disks" {
   count             = local.disks_count
   availability_zone = var.zone != "" ? var.zone : element(data.aws_availability_zones.zones.names, count.index)
-  size              = 50
+  size              = var.disk_size
+  tags              = var.labels
+  type = var.disk_type
   # provisioned_iops = 100000
-  tags = {
-    Name = "${var.identifier}-n${format("%d", count.index + 1)}"
-  }
+  # tags = {
+  #   Name = "${var.identifier}-n${format("%d", count.index + 1)}"
+  # }
 }

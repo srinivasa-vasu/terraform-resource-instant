@@ -23,6 +23,7 @@ variable "ssh_private_key" {
 variable "bastion_ssh_private_key" {
   description = "private key to connect to the bastion instance"
   type        = string
+  default     = ""
 }
 
 variable "ssh_public_key" {
@@ -86,4 +87,35 @@ variable "instance_type" {
 variable "labels" {
   description = "labels to be added to the resources"
   type        = map(string)
+}
+
+variable "disks_mount_points" {
+  type = list(object({
+    device_name = string
+    mount_point = string
+  }))
+  default = [
+    {
+      device_name = "/dev/sd"
+      mount_point = "/disks/ssd"
+    }
+  ]
+}
+
+variable "bastion" {
+  description = "bastion instance name"
+  type        = string
+  default     = ""
+}
+
+variable "bastion_on" {
+  description = "enable/disable bastion"
+  type        = bool
+  default     = false
+}
+
+variable "image_type" {
+  description = "os distribution to use"
+  type        = string
+  default     = "almalinux8"
 }
