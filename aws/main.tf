@@ -2,15 +2,9 @@ locals {
   disks_count = (var.disks * var.instances)
   ingress     = "${chomp(data.http.localip.body)}/32"
 
-  # disks_mounts = [for index in range(var.disks) : {
-  #   device_name = "${var.disks_mount_points[0].device_name}${index + 2}${var.disks_mount_points[0].device_suffix}"
-  #   mount_point = "${var.disks_mount_points[0].mount_point}${index - 1}"
-  # }]
-
   disks_mounts = [for index in range(var.disks) : [
     "${var.disks_mount_points[0].device_name}${index + 2}${var.disks_mount_points[0].device_suffix}", "${var.disks_mount_points[0].mount_point}${index}"
   ]]
-
 
   ami_list = [
     {
@@ -67,7 +61,6 @@ data "http" "localip" {
 }
 
 data "aws_vpc" "vpc" {
-  # id = var.vpc
   filter {
     name   = "tag:Name"
     values = ["${var.vpc}"]
@@ -90,7 +83,6 @@ data "aws_subnets" "selected" {
 }
 
 data "aws_instance" "bastion" {
-  # instance_id = "yb-bastion"
   count = var.bastion_on ? 1 : 0
   filter {
     name   = "tag:Name"
@@ -123,11 +115,6 @@ data "aws_ami" "ami" {
 }
 
 data "aws_security_groups" "sg" {
-  # filter {
-  #   name   = "group-name"
-  #   values = [var.security_group]
-  # }
-
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.vpc.id]
@@ -221,7 +208,7 @@ resource "aws_ebs_volume" "disks" {
   availability_zone = var.zone != "" ? var.zone : element(data.aws_availability_zones.zones.names, count.index)
   size              = var.disk_size
   tags              = var.labels
-  type = var.disk_type
+  type              = var.disk_type
   # provisioned_iops = 100000
   # tags = {
   #   Name = "${var.identifier}-n${format("%d", count.index + 1)}"
