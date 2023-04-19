@@ -178,7 +178,6 @@ resource "google_compute_disk" "disks" {
   name  = "${var.identifier}-nw-n${format("%d", count.index + 1)}"
   type  = var.disk_type
   zone  = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, floor(count.index / var.disks))
-  # image = "centos-cloud/centos-7"
   size   = var.disk_size
   labels = var.labels
   # provisioned_iops = 100000
