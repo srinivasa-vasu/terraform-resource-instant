@@ -1,6 +1,14 @@
 locals {
   disks_count = (var.disks * var.instances)
   ingress     = "${chomp(data.http.localip.body)}/32"
+
+  dev_ids = ["b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+
+  disks_mounts = [for index in range(var.disks) : [
+    "${var.disks_mount_points[0].device_name}${local.dev_ids[index]}", "${var.disks_mount_points[0].mount_point}${index}"
+  ]]
+
+  zones = [1, 2, 3]
 }
 
 # Will be authecticated using `az` cli as it is based on user authentication instead of ServicePrinciple
@@ -11,7 +19,7 @@ provider "azurerm" {
   tenant_id       = var.tenant_id
 }
 
-# Workstation public ip to allow access to. It identies the IP where this gets executed and adds it to the 
+# Workstation public ip to allow access to. It identies the IP where this gets executed and adds it to the
 # firewall rule in the firewall block
 data "http" "localip" {
   url = "http://ipv4.icanhazip.com"
@@ -42,6 +50,14 @@ data "azurerm_network_security_group" "nsg" {
   resource_group_name = data.azurerm_resource_group.rg.name
 }
 
+data "template_file" "post_create" {
+  template = file("../shared/scripts/instance_ops.tpl")
+
+  vars = {
+    disks = join(" ", [for disk in local.disks_mounts : join(",", disk)])
+  }
+}
+
 resource "azurerm_network_interface" "nic" {
   count               = var.instances
   name                = "${var.identifier}-n${format("%d", count.index + 1)}"
@@ -69,11 +85,13 @@ resource "azurerm_linux_virtual_machine" "instances" {
   network_interface_ids = [azurerm_network_interface.nic[count.index].id]
   size                  = var.instance_type
   admin_username        = var.ssh_user
-  zone                  = var.zone
+  zone                  = var.zone != "" ? var.zone : local.zones[count.index]
+
+  tags = var.labels
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
+    storage_account_type = var.disk_type
   }
 
   admin_ssh_key {
@@ -89,8 +107,8 @@ resource "azurerm_linux_virtual_machine" "instances" {
   }
 }
 
-resource "null_resource" "format_attached_disks" {
-  count = var.instances
+resource "null_resource" "format_attached_disks_bastion_on" {
+  count = var.bastion_on ? var.instances : 0
   depends_on = [
     azurerm_virtual_machine_data_disk_attachment.attach_disks
   ]
@@ -106,17 +124,26 @@ resource "null_resource" "format_attached_disks" {
 
   provisioner "remote-exec" {
     inline = [
-      "sudo mkfs -t xfs /dev/sdc",
-      "sudo mkfs -t xfs /dev/sdb",
-      "sudo mkdir -p /disks/ssd0",
-      "sudo mkdir -p /disks/ssd1",
-      "sudo mount /dev/sdc /disks/ssd0",
-      "sudo mount /dev/sdb /disks/ssd1",
-      "sudo cp /etc/fstab /etc/fstab.orig",
-      "disk0_uuid=$(sudo blkid | grep -i \"/dev/sdc\" | awk '{print $2}' | tr -d '\"')",
-      "disk1_uuid=$(sudo blkid | grep -i \"/dev/sdb\" | awk '{print $2}' | tr -d '\"')",
-      "echo $disk0_uuid /disks/ssd0  xfs  defaults,nofail  0  2 | sudo tee -a /etc/fstab",
-      "echo $disk1_uuid /disks/ssd1  xfs  defaults,nofail  0  2 | sudo tee -a /etc/fstab"
+      data.template_file.post_create.rendered
+    ]
+  }
+}
+
+resource "null_resource" "format_attached_disks_bastion_off" {
+  count = var.bastion_on ? 0 : var.instances
+  depends_on = [
+    azurerm_virtual_machine_data_disk_attachment.attach_disks
+  ]
+  connection {
+    host        = azurerm_linux_virtual_machine.instances[count.index].private_ip_address
+    type        = "ssh"
+    user        = var.ssh_user
+    private_key = file(var.ssh_private_key)
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      data.template_file.post_create.rendered
     ]
   }
 }
@@ -134,8 +161,9 @@ resource "azurerm_managed_disk" "disks" {
   name                 = "${var.identifier}-n${format("%d", count.index + 1)}"
   location             = var.region
   resource_group_name  = data.azurerm_resource_group.rg.name
-  storage_account_type = "Standard_LRS"
+  storage_account_type = var.disk_type
   create_option        = "Empty"
-  disk_size_gb         = "50"
-  zones                = [var.zone]
+  disk_size_gb         = var.disk_size
+  zones                = [var.zone != "" ? var.zone : element(local.zones, floor(count.index / var.disks))]
+  tags                 = var.labels
 }

@@ -82,11 +82,12 @@ data "google_compute_instance" "bastion" {
   zone  = "asia-south1-a"
 }
 
-data "template_file" "disk_setup" {
-  template = file("../shared/scripts/format_and_mount_disks.tpl")
+data "template_file" "post_create" {
+  template = file("../shared/scripts/instance_ops.tpl")
 
   vars = {
     disks = join(" ", [for disk in local.disks_mounts : join(",", disk)])
+    os_image = var.image_type
   }
 }
 
@@ -100,7 +101,6 @@ resource "google_compute_instance" "instances" {
   boot_disk {
     initialize_params {
       image = local.selected_image.path
-      # image = "ubuntu-os-cloud/ubuntu-1804-lts"
       size   = 50
       type   = var.disk_type
       labels = var.labels
@@ -142,7 +142,7 @@ resource "null_resource" "format_attached_disks_bastion_on" {
 
   provisioner "remote-exec" {
     inline = [
-      data.template_file.disk_setup.rendered
+      data.template_file.post_create.rendered
     ]
   }
 
@@ -162,7 +162,7 @@ resource "null_resource" "format_attached_disks_bastion_off" {
 
   provisioner "remote-exec" {
     inline = [
-      data.template_file.disk_setup.rendered
+      data.template_file.post_create.rendered
     ]
   }
 }
@@ -174,10 +174,10 @@ resource "google_compute_attached_disk" "attach_disks" {
 }
 
 resource "google_compute_disk" "disks" {
-  count = local.disks_count
-  name  = "${var.identifier}-nw-n${format("%d", count.index + 1)}"
-  type  = var.disk_type
-  zone  = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, floor(count.index / var.disks))
+  count  = local.disks_count
+  name   = "${var.identifier}-nw-n${format("%d", count.index + 1)}"
+  type   = var.disk_type
+  zone   = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, floor(count.index / var.disks))
   size   = var.disk_size
   labels = var.labels
   # provisioned_iops = 100000

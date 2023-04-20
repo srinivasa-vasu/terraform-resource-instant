@@ -90,3 +90,39 @@ variable "bastion" {
   description = "bastion instance public ip"
   type        = string
 }
+
+variable "disk_size" {
+  description = "disk size to use in GB"
+  type        = number
+  default     = 50
+}
+
+variable "disk_type" {
+  description = "disk type to use"
+  type        = string
+  default     = "Standard_LRS"
+}
+
+variable "bastion_on" {
+  description = "enable/disable bastion"
+  type        = bool
+  default     = false
+}
+
+variable "labels" {
+  description = "labels to be added to the resources"
+  type        = map(string)
+}
+
+variable "disks_mount_points" {
+  type = list(object({
+    device_name = string
+    mount_point = string
+  }))
+  default = [
+    {
+      device_name = "/dev/sd"
+      mount_point = "/disks/ssd"
+    }
+  ]
+}

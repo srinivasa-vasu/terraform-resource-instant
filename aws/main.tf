@@ -126,11 +126,12 @@ data "aws_security_groups" "sg" {
   }
 }
 
-data "template_file" "disk_setup" {
-  template = file("../shared/scripts/format_and_mount_disks.tpl")
+data "template_file" "post_create" {
+  template = file("../shared/scripts/instance_ops.tpl")
 
   vars = {
     disks = join(" ", [for disk in local.disks_mounts : join(",", disk)])
+    os_image = var.ami_type
   }
 }
 
@@ -172,7 +173,7 @@ resource "null_resource" "format_attached_disks_bastion_on" {
 
   provisioner "remote-exec" {
     inline = [
-      data.template_file.disk_setup.rendered
+      data.template_file.post_create.rendered
     ]
   }
 }
@@ -191,7 +192,7 @@ resource "null_resource" "format_attached_disks_bastion_off" {
 
   provisioner "remote-exec" {
     inline = [
-      data.template_file.disk_setup.rendered
+      data.template_file.post_create.rendered
     ]
   }
 }
@@ -205,7 +206,7 @@ resource "aws_volume_attachment" "attach_disks" {
 
 resource "aws_ebs_volume" "disks" {
   count             = local.disks_count
-  availability_zone = var.zone != "" ? var.zone : element(data.aws_availability_zones.zones.names, count.index)
+  availability_zone = var.zone != "" ? var.zone : element(data.aws_availability_zones.zones.names, floor(count.index / var.disks))
   size              = var.disk_size
   tags              = var.labels
   type              = var.disk_type
