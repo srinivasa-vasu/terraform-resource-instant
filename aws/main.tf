@@ -1,6 +1,7 @@
 locals {
   disks_count = (var.disks * var.instances)
-  ingress     = "${chomp(data.http.localip.body)}/32"
+  subnet      = var.subnet != "" ? var.subnet : "${var.subnet_prefix}*" # if subnet is not provided, use the prefix
+  # ingress     = "${chomp(data.http.localip.body)}/32"
 
   disks_mounts = [for index in range(var.disks) : [
     "${var.disks_mount_points[0].device_name}${index + 2}${var.disks_mount_points[0].device_suffix}", "${var.disks_mount_points[0].mount_point}${index}"
@@ -63,7 +64,7 @@ data "http" "localip" {
 data "aws_vpc" "vpc" {
   filter {
     name   = "tag:Name"
-    values = ["${var.vpc}"]
+    values = [var.vpc]
   }
 }
 
@@ -71,14 +72,15 @@ data "aws_availability_zones" "zones" {
   state = "available"
 }
 
-data "aws_subnets" "selected" {
+data "aws_subnets" "subnets" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.vpc.id]
   }
+
   filter {
     name   = "tag:Name"
-    values = ["*pvt*"]
+    values = [local.subnet]
   }
 }
 
@@ -86,11 +88,11 @@ data "aws_instance" "bastion" {
   count = var.bastion_on ? 1 : 0
   filter {
     name   = "tag:Name"
-    values = ["${var.bastion}"]
+    values = [var.bastion]
   }
   filter {
     name   = "availability-zone"
-    values = ["${var.zone}"]
+    values = [var.zone]
   }
 }
 
@@ -114,7 +116,7 @@ data "aws_ami" "ami" {
   }
 }
 
-data "aws_security_groups" "sg" {
+data "aws_security_group" "sg" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.vpc.id]
@@ -130,9 +132,19 @@ data "template_file" "post_create" {
   template = file("../shared/scripts/instance_ops.tpl")
 
   vars = {
-    disks = join(" ", [for disk in local.disks_mounts : join(",", disk)])
+    disks    = join(" ", [for disk in local.disks_mounts : join(",", disk)])
     os_image = var.ami_type
   }
+}
+
+resource "tls_private_key" "ssh_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "generated_key" {
+  key_name   = var.ssh_keypair
+  public_key = tls_private_key.ssh_key.public_key_openssh
 }
 
 resource "aws_instance" "instances" {
@@ -140,10 +152,10 @@ resource "aws_instance" "instances" {
   ami   = data.aws_ami.ami.id
   # associate_public_ip_address = var.associate_public_ip_address
   instance_type          = var.instance_type
-  key_name               = var.ssh_keypair
+  key_name               = aws_key_pair.generated_key.key_name
   availability_zone      = var.zone != "" ? var.zone : element(data.aws_availability_zones.zones.names, count.index)
-  subnet_id              = var.subnet != "" ? var.subnet : element(data.aws_subnets.selected.ids, count.index)
-  vpc_security_group_ids = data.aws_security_groups.sg.ids
+  subnet_id              = var.subnet != "" ? data.aws_subnets.subnets.ids[0] : element(data.aws_subnets.subnets.ids, count.index)
+  vpc_security_group_ids = [data.aws_security_group.sg.id]
   root_block_device {
     volume_size = 50
     tags        = var.labels
@@ -198,8 +210,8 @@ resource "null_resource" "format_attached_disks_bastion_off" {
 }
 
 resource "aws_volume_attachment" "attach_disks" {
-  device_name = local.disks_mounts[count.index].device_name
   volume_id   = aws_ebs_volume.disks[count.index].id
+  device_name = local.disks_mounts[floor(count.index % var.disks)].0
   instance_id = aws_instance.instances[floor(count.index / var.disks)].id
   count       = local.disks_count
 }

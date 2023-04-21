@@ -1,24 +1,26 @@
 variable "region" {
   description = "aws region to deploy the services to"
-  default     = "ap-south-1"
   type        = string
+  default     = ""
 }
 
 variable "zone" {
   description = "aws zone in a given region"
-  default     = "ap-south-1a"
   type        = string
+  default     = ""
 }
 
 variable "ssh_private_key" {
   description = "private key to connect to the instance"
   type        = string
+  default     = ""
 }
 
-# variable "bastion_ssh_private_key" {
-#   description = "private key to connect to the bastion instance"
-#   type        = string
-# }
+variable "bastion_ssh_private_key" {
+  description = "private key to connect to the bastion instance"
+  type        = string
+  default     = ""
+}
 
 variable "ssh_keypair" {
   description = "key pair name managed by aws"
@@ -37,11 +39,6 @@ variable "bastion_ssh_user" {
   default     = "ubuntu"
 }
 
-# variable "credentials" {
-#   description = "shared iam credentials file path"
-#   type        = string
-# }
-
 variable "vpc" {
   description = "vpc region"
   type        = string
@@ -49,6 +46,12 @@ variable "vpc" {
 
 variable "subnet" {
   description = "vpc subnet"
+  type        = string
+  default     = ""
+}
+
+variable "subnet_prefix" {
+  description = "vpc subnet prefix"
   type        = string
 }
 
@@ -71,6 +74,7 @@ variable "instance_type" {
 variable "bastion" {
   description = "bastion instance name"
   type        = string
+  default     = ""
 }
 
 variable "config" {

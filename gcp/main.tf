@@ -86,7 +86,7 @@ data "template_file" "post_create" {
   template = file("../shared/scripts/instance_ops.tpl")
 
   vars = {
-    disks = join(" ", [for disk in local.disks_mounts : join(",", disk)])
+    disks    = join(" ", [for disk in local.disks_mounts : join(",", disk)])
     os_image = var.image_type
   }
 }
@@ -100,7 +100,7 @@ resource "google_compute_instance" "instances" {
 
   boot_disk {
     initialize_params {
-      image = local.selected_image.path
+      image  = local.selected_image.path
       size   = 50
       type   = var.disk_type
       labels = var.labels

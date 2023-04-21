@@ -5,14 +5,14 @@ variable "project" {
 
 variable "region" {
   description = "gcp region to deploy the services to"
-  default     = "asia-south1"
   type        = string
+  default     = ""
 }
 
 variable "zone" {
   description = "gcp zone in a given region"
-  default     = ""
   type        = string
+  default     = ""
 }
 
 variable "ssh_private_key" {
