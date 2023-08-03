@@ -119,3 +119,9 @@ variable "image_type" {
   type        = string
   default     = "almalinux8"
 }
+
+variable "tags" {
+  description = "tags to be added to the resources"
+  type        = list(string)
+  default     = []
+}

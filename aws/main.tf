@@ -1,6 +1,7 @@
 locals {
   disks_count = (var.disks * var.instances)
   subnet      = var.subnet != "" ? var.subnet : "${var.subnet_prefix}*" # if subnet is not provided, use the prefix
+  dev_ids     = ["b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
   # ingress     = "${chomp(data.http.localip.body)}/32"
 
   disks_mounts = [for index in range(var.disks) : [
@@ -199,7 +200,7 @@ resource "null_resource" "format_attached_disks_bastion_off" {
     host        = aws_instance.instances[count.index].private_ip
     type        = "ssh"
     user        = var.ssh_user
-    private_key = file(var.ssh_private_key)
+    private_key = tls_private_key.ssh_key.private_key_pem
   }
 
   provisioner "remote-exec" {
@@ -210,8 +211,8 @@ resource "null_resource" "format_attached_disks_bastion_off" {
 }
 
 resource "aws_volume_attachment" "attach_disks" {
+  device_name = "/dev/sd${local.dev_ids[count.index]}"
   volume_id   = aws_ebs_volume.disks[count.index].id
-  device_name = local.disks_mounts[floor(count.index % var.disks)].0
   instance_id = aws_instance.instances[floor(count.index / var.disks)].id
   count       = local.disks_count
 }

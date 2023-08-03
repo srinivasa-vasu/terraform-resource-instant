@@ -97,6 +97,7 @@ resource "google_compute_instance" "instances" {
   machine_type              = var.instance_type
   allow_stopping_for_update = true
   zone                      = var.zone != "" ? var.zone : element(data.google_compute_zones.zones.names, count.index)
+  tags                      = var.tags
 
   boot_disk {
     initialize_params {

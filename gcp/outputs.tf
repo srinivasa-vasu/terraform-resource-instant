@@ -2,7 +2,8 @@ output "instance_private_ip_addresses" {
   value = {
     for instance in google_compute_instance.instances :
     instance.id => {
-      "private_ip" = instance.network_interface.0.network_ip,
+      "private_ip"        = instance.network_interface.0.network_ip,
+      "availability_zone" = instance.zone,
       # "public_ip"  = instance.network_interface.0.access_config.0.nat_ip
     }
   }
@@ -14,4 +15,3 @@ output "instance_private_ip_addresses_list" {
     instance.network_interface.0.network_ip
   ]
 }
-
