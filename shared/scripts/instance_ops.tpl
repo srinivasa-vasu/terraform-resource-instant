@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 
 # Format and mount disks
 DISKS="${disks}"

@@ -119,7 +119,7 @@ variable "disks_mount_points" {
   default = [
     {
       device_name   = "/dev/nvme"
-      mount_point   = "/disks/ssd"
+      mount_point   = "/mnt/d"
       device_suffix = "n1"
     }
   ]
@@ -134,4 +134,22 @@ variable "bastion_on" {
   description = "enable/disable bastion"
   type        = bool
   default     = false
+}
+
+variable "architecture" {
+  description = "architecture to use"
+  type        = string
+  default     = "x86_64"
+}
+
+variable "ami_id" {
+  description = "ami id to use"
+  type        = string
+  default     = ""
+}
+
+variable "identifier" {
+  description = "identifier to use"
+  type        = string
+  default     = "sv"
 }

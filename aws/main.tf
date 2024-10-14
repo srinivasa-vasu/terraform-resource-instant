@@ -1,45 +1,59 @@
 locals {
   disks_count = (var.disks * var.instances)
   subnet      = var.subnet != "" ? var.subnet : "${var.subnet_prefix}*" # if subnet is not provided, use the prefix
-  dev_ids     = ["b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+  # dev_ids     = ["b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+  dev_ids = ["e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
   # ingress     = "${chomp(data.http.localip.body)}/32"
 
   disks_mounts = [for index in range(var.disks) : [
-    "${var.disks_mount_points[0].device_name}${index + 2}${var.disks_mount_points[0].device_suffix}", "${var.disks_mount_points[0].mount_point}${index}"
+    "${var.disks_mount_points[0].device_name}${index + 1}${var.disks_mount_points[0].device_suffix}", "${var.disks_mount_points[0].mount_point}${index}"
   ]]
 
   ami_list = [
     {
       "type" = "ubuntu18"
-      "path" = "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*"
+      "path" = "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-*"
+      "user" = "ubuntu"
     },
     {
       "type" = "ubuntu20"
-      "path" = "ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"
+      "path" = "ubuntu/images/hvm-ssd/ubuntu-focal-20.04-*"
+      "user" = "ubuntu"
     },
     {
       "type" = "ubuntu22"
-      "path" = "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-daily-*"
+      "path" = "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-*"
+      "user" = "ubuntu"
     },
     {
       "type" = "centos7"
       "path" = "centos/7/images/CentOS-7-x86_64-GenericCloud-*"
+      "user" = ""
     },
     {
       "type" = "almalinux8"
       "path" = "AlmaLinux OS 8*"
+      "user" = ""
     },
     {
       "type" = "almalinux9"
       "path" = "AlmaLinux OS 9*"
+      "user" = ""
     },
     {
       "type" = "rhel8"
       "path" = "RHEL-8*"
+      "user" = ""
+    },
+    {
+      "type" = "rhel9"
+      "path" = "RHEL-9*"
+      "user" = ""
     },
     {
       "type" = "amazonlinux2"
       "path" = "amzn2-ami-hvm-2.0.*-x86_64-gp2"
+      "user" = ""
     }
   ]
 
@@ -48,6 +62,11 @@ locals {
     {
       "type" = "almalinux8"
       "path" = "AlmaLinux OS 8*"
+  })
+
+  post_create = templatefile("../shared/scripts/instance_ops.tpl", {
+    disks    = join(" ", [for disk in local.disks_mounts : join(",", disk)])
+    os_image = var.ami_type
   })
 }
 
@@ -99,7 +118,7 @@ data "aws_instance" "bastion" {
 
 data "aws_ami" "ami" {
   most_recent = true
-  owners      = ["aws-marketplace"]
+  owners      = ["aws-marketplace", "amazon"]
 
   filter {
     name   = "name"
@@ -108,7 +127,7 @@ data "aws_ami" "ami" {
 
   filter {
     name   = "architecture"
-    values = ["x86_64"]
+    values = ["${var.architecture}"]
   }
 
   filter {
@@ -129,15 +148,6 @@ data "aws_security_group" "sg" {
   }
 }
 
-data "template_file" "post_create" {
-  template = file("../shared/scripts/instance_ops.tpl")
-
-  vars = {
-    disks    = join(" ", [for disk in local.disks_mounts : join(",", disk)])
-    os_image = var.ami_type
-  }
-}
-
 resource "tls_private_key" "ssh_key" {
   algorithm = "RSA"
   rsa_bits  = 4096
@@ -150,7 +160,7 @@ resource "aws_key_pair" "generated_key" {
 
 resource "aws_instance" "instances" {
   count = var.instances
-  ami   = data.aws_ami.ami.id
+  ami   = var.ami_id != "" ? var.ami_id : data.aws_ami.ami.id
   # associate_public_ip_address = var.associate_public_ip_address
   instance_type          = var.instance_type
   key_name               = aws_key_pair.generated_key.key_name
@@ -162,7 +172,12 @@ resource "aws_instance" "instances" {
     tags        = var.labels
   }
 
-  tags = var.labels
+  tags = (merge(
+    var.labels,
+    {
+      "Name" = "${var.identifier}-n${format("%d", count.index + 1)}"
+    }
+  ))
 
   lifecycle {
     create_before_destroy = true
@@ -170,7 +185,7 @@ resource "aws_instance" "instances" {
 }
 
 resource "null_resource" "format_attached_disks_bastion_on" {
-  count = var.bastion_on ? var.instances : 0
+  count = var.bastion_on ? ((var.disks > 0) ? var.instances : 0) : 0
   depends_on = [
     aws_volume_attachment.attach_disks
   ]
@@ -186,26 +201,26 @@ resource "null_resource" "format_attached_disks_bastion_on" {
 
   provisioner "remote-exec" {
     inline = [
-      data.template_file.post_create.rendered
+      local.post_create
     ]
   }
 }
 
 resource "null_resource" "format_attached_disks_bastion_off" {
-  count = var.bastion_on ? 0 : var.instances
+  count = var.bastion_on ? 0 : ((var.disks > 0) ? var.instances : 0)
   depends_on = [
     aws_volume_attachment.attach_disks
   ]
   connection {
     host        = aws_instance.instances[count.index].private_ip
     type        = "ssh"
-    user        = var.ssh_user
+    user        = local.selected_ami.user != "" ? local.selected_ami.user : var.ssh_user
     private_key = tls_private_key.ssh_key.private_key_pem
   }
 
   provisioner "remote-exec" {
     inline = [
-      data.template_file.post_create.rendered
+      local.post_create
     ]
   }
 }
@@ -221,10 +236,12 @@ resource "aws_ebs_volume" "disks" {
   count             = local.disks_count
   availability_zone = var.zone != "" ? var.zone : element(data.aws_availability_zones.zones.names, floor(count.index / var.disks))
   size              = var.disk_size
-  tags              = var.labels
   type              = var.disk_type
   # provisioned_iops = 100000
-  # tags = {
-  #   Name = "${var.identifier}-n${format("%d", count.index + 1)}"
-  # }
+  tags = (merge(
+    var.labels,
+    {
+      "Name" = "${var.identifier}-n${format("%d", count.index + 1)}"
+    }
+  ))
 }

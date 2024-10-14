@@ -80,7 +80,7 @@ variable "disk_size" {
 
 variable "instance_type" {
   description = "instance types to create"
-  default     = "c2d-standard-32"
+  default     = "n2-standard-4"
   type        = string
 }
 
@@ -96,10 +96,20 @@ variable "disks_mount_points" {
   }))
   default = [
     {
-      device_name = "/dev/sd"
-      mount_point = "/disks/ssd"
+      device_name = "/dev/"
+      mount_point = "/mnt/d"
     }
   ]
+}
+
+variable "letters" {
+  type    = list(string)
+  default = ["b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+}
+
+variable "numbers" {
+  type    = list(string)
+  default = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27"]
 }
 
 variable "bastion" {
