@@ -50,10 +50,11 @@ locals {
   selected_image = lookup({ for val in local.image_list :
   0 => val if val.type == var.image_type }, 0, local.image_list[0])
 
-  post_create = templatefile("../shared/scripts/gcp_ops.tpl", {
+  post_create = templatefile("../shared/scripts/instance_ops_v2.tpl", {
     # disks    = join(" ", [for disk in local.disks_mounts : join(",", disk)])
-    os_image = var.image_type
-    mnt      = "${var.disks_mount_points[0].mount_point}"
+    os_image       = var.image_type
+    mnt            = "${var.disks_mount_points[0].mount_point}"
+    cloud_provider = "gcp"
   })
 
 }

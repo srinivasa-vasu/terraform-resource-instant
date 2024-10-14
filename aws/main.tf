@@ -5,9 +5,9 @@ locals {
   dev_ids = ["e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
   # ingress     = "${chomp(data.http.localip.body)}/32"
 
-  disks_mounts = [for index in range(var.disks) : [
-    "${var.disks_mount_points[0].device_name}${index + 1}${var.disks_mount_points[0].device_suffix}", "${var.disks_mount_points[0].mount_point}${index}"
-  ]]
+  # disks_mounts = [for index in range(var.disks) : [
+  #   "${var.disks_mount_points[0].device_name}${index + 1}${var.disks_mount_points[0].device_suffix}", "${var.disks_mount_points[0].mount_point}${index}"
+  # ]]
 
   ami_list = [
     {
@@ -64,9 +64,12 @@ locals {
       "path" = "AlmaLinux OS 8*"
   })
 
-  post_create = templatefile("../shared/scripts/instance_ops.tpl", {
-    disks    = join(" ", [for disk in local.disks_mounts : join(",", disk)])
-    os_image = var.ami_type
+  post_create = templatefile("../shared/scripts/instance_ops_v2.tpl", {
+    # disks    = join(" ", [for disk in local.disks_mounts : join(",", disk)])
+    # os_image = var.ami_type
+    os_image       = var.ami_type
+    mnt            = "${var.disks_mount_points[0].mount_point}"
+    cloud_provider = "aws"
   })
 }
 

@@ -1,17 +1,5 @@
 #!/bin/bash
-set -x
-
-OS_IMAGE="${os_image}"
-
-# Get the boot disk device name
-boot_disk_device=$(curl -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/disks/0/device-name")
-
-boot_disk="/dev/disk/by-id/google-$${boot_disk_device}"
-
-echo "Boot disk identified as: $boot_disk"
-
-# Get list of all disk devices
-devices=$(lsblk -ndo name,type | awk '$2=="disk" {print "/dev/"$1}')
+# set -x
 
 # Function to check if a disk is formatted
 is_formatted() {
@@ -37,12 +25,13 @@ format_and_mount() {
     fi
 
     # Check if the device is already mounted
-    if ! grep -qs "$mount_point" /proc/mounts; then
+    if ! grep -qs "$device" /proc/mounts; then
         echo "Mounting $device to $mount_point..."
         # Create mount point if it doesn't exist
         sudo mkdir -p "$mount_point"
         # Mount the disk
         sudo mount $device "$mount_point"
+        ((index++))
         # Add entry to fstab if it doesn't exist
         if ! grep -qs "$device" /etc/fstab; then
             # Add entry to /etc/fstab to mount disk at boot
@@ -51,12 +40,31 @@ format_and_mount() {
             sudo systemctl daemon-reload
         fi
     else
-        echo "$device is already mounted to $mount_point."
+        echo "$device is already mounted"
     fi
 }
 
 # Initialize index counter
 index=0
+
+OS_IMAGE="${os_image}"
+
+CLOUD_PROVIDER="${cloud_provider}"
+
+if [[ "$${CLOUD_PROVIDER}" == "gcp" ]]; then
+    boot_disk_device=$(curl -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/disks/0/device-name")
+    boot_disk="/dev/disk/by-id/google-$${boot_disk_device}"
+elif [[ "$${CLOUD_PROVIDER}" == "aws" ]]; then
+    boot_disk=$(curl -s http://169.254.169.254/latest/meta-data/block-device-mapping/root)
+# elif [[ "$${CLOUD_PROVIDER}" == "azure" ]]; then
+    # todo
+fi
+
+echo "Boot disk identified as: $boot_disk"
+
+# Get list of all disk devices
+devices=$(lsblk -ndo name,type | awk '$2=="disk" {print "/dev/"$1}')
+
 
 # Iterate through all disk devices
 for device in $devices; do
@@ -69,17 +77,12 @@ for device in $devices; do
         continue
     fi
 
-    # Get device ID
-    device_id=$(basename "$actual_device")
-
     # Mount point
     mount_point="${mnt}$index"
-    echo "Mount point for $device_id: $mount_point"
-
-    ((index++))
-
+    # echo "Mount point for $device_id: $mount_point"
     # Format and mount the disk
     format_and_mount "$actual_device" "$mount_point"
+
 done
 
 echo "Disk formatting and mounting completed."
